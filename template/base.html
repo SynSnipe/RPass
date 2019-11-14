@@ -1,0 +1,46 @@
+<!doctype html>
+<title>{{ title }} - Password Generator</title>
+<!-- <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"> -->
+<body>
+
+    <header>
+        {% block header %}{% endblock %}
+    </header>
+
+    <h1>{{ title }}</h1>
+
+    <nav>
+        <ul>
+            <li><a href="{{ url_for('home_page') }}">Home</a>
+            {% if name %}
+                <li><span>{{ name }}</span>
+                <li><a href="{{ url_for('password_generation') }}">Password Generation</a>
+                <li><a href="{{ url_for('password_storage') }}">Password Storage</a>
+                <li><a href="{{ url_for('logout') }}">Log Out</a>
+            {% else %}
+                <li><a href="{{ url_for('user_register') }}">Register</a>
+                <li><a href="{{ url_for('login') }}">Log In</a>
+            {% endif %}
+        </ul>
+    </nav>
+
+    {% if displayUserRegisterForm == True %}
+        <form action="{{ url_for('user_register') }}" method="post">
+            <p>Email: <input type=text name=email></p>
+            <p>Username: <input type=text name=username></p>
+            <p>Password: <input type=password name=password></p>
+            <p><input type=submit value=Register></p>
+        </form>
+    {% endif %}
+
+    {% if displayLogonForm == True %}
+        <form action="{{ url_for('login') }}" method="post">
+            <p>Username: <input type=text name=username>
+            <p>Password: <input type=password name=password>
+            <p><input type=submit value=Login>
+        </form>
+    {% endif %}
+    {% block form %}{% endblock %}
+    {% block content %}{% endblock %}
+
+</body>
