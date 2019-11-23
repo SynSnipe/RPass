@@ -19,7 +19,7 @@ def hasUpper(inputStr):
 
 
 def hasSpec(inputStr):
-    return any(char in "!@#$%^&*,./~`'\"[]{}()=+\\|;:" for char in inputStr)
+    return any(char in "!@#$%^&*,./~`'\"[]{}()=+\\|;:<>-_?" for char in inputStr)
 
 
 def entropyCalc(password):
@@ -40,7 +40,7 @@ def entropyCalc(password):
     if hasNumber(password):
         poolOfChars += 10
     if hasSpec(password):
-        poolOfChars += 27
+        poolOfChars += 32
     rToL = pow(poolOfChars, len(password))
     entropy = math.log2(rToL)
     return entropy

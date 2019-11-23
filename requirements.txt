@@ -2,6 +2,4 @@ Flask
 flask_sqlalchemy
 flask-login
 flask_bootstrap
-flask_sslify
-flask_talisman
 
