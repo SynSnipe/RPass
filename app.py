@@ -13,8 +13,8 @@ global app
 app = Flask(__name__)
 app.debug = False
 # This line is for Sean's development system, you may need to use the line commented below it
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////Users//sean_local//PycharmProjects//pwd_gen_ent_calc//test.db'
-#app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////test.db'
+#app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////Users//sean_local//PycharmProjects//pwd_gen_ent_calc//test.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////test.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'mysecret'
 
