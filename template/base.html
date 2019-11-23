@@ -7,8 +7,6 @@
         {% block header %}{% endblock %}
     </header>
 
-
-
     <h1>{{ title }}</h1>
 
     <h3>{{ message }}</h3>
@@ -19,6 +17,7 @@
             {% if name %}
                 <li><span>{{ name }}</span>
                 <li><a href="{{ url_for('password_generation') }}">Password Generation</a>
+                <li><a href="{{ url_for('password_entropy_calculator') }}">Password Entropy Calculator</a>
                 <li><a href="{{ url_for('password_storage') }}">Password Storage</a>
                 <li><a href="{{ url_for('logout') }}">Log Out</a>
             {% else %}
