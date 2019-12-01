@@ -10,11 +10,11 @@ import math
 
 # Define Flask App
 global app
-app = Flask(__name__)
+app = Flask(__name__, template_folder="templates")
 app.debug = False
 # This line is for Sean's development system, you may need to use the line commented below it
-#app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////Users//sean_local//PycharmProjects//pwd_gen_ent_calc//test.db'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////test.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////Users//sean_local//PycharmProjects//pwd_gen_ent_calc//test.db'
+#app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////test.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'mysecret'
 
@@ -296,10 +296,49 @@ def password_entropy_calculator():
 
 
 # Password Storage URL Route and Password Storage View Function
-@app.route('/pwd-store')
+@app.route('/pwd-store', methods=["GET", "POST"])
 # Login Required to reach this URL Route
 @login_required
 def password_storage():
+    displayList = []
+    if request.method == 'POST':
+        # If the user opted to delete all passwords
+        if 'deleteall' in request.form:
+            # Ensure the users input was DELETE signifying they want to delete all passwords
+            if request.form["deleteall"] == 'DELETE':
+                # Iterate thru all stored passwords and delete each one that matches current user id
+                for thisStoredPassword in StoredPassword.query.filter_by(userid=current_user.id).all():
+                    db.session.delete(thisStoredPassword)
+                # Commit the deletions to the database
+                db.session.commit()
+        # If the user opted to delete a password
+        if 'delete' in request.form:
+            # Iterate thru all stored passwords
+            for thisStoredPassword in StoredPassword.query.filter_by(userid=current_user.id).all():
+                # If the current password matches the record ID submitted by the user
+                if thisStoredPassword.id == int(request.form['delete'].split(' ')[1]):
+                    # Delete the password model object
+                    db.session.delete(thisStoredPassword)
+            # Commit the deletion to the database
+            db.session.commit()
+        # Check to see if the user has clicked Display to show a password
+        if 'display' in request.form:
+            # Add the current stored password ID to the displaylist
+            displayList.append(int(request.form['display'].split(' ')[1]))
+        # If the user has submitted a new stored password record
+        if 'newpass' in request.form:
+            # Initialize the temporary variables
+            username = request.form["username"]
+            password = request.form["passwd"]
+            location = request.form["location"]
+            # Create a new StoredPassword Model Object
+            newpassword = StoredPassword(username=username, password=password, acctlocation=location,
+                                         userid=current_user.id)
+            # Add the new Stored Password Model Object to the Database Session
+            db.session.add(newpassword)
+            # Commit the new objec to the Database.
+            db.session.commit()
+
     passwordList = []
 
     # Query passwords from the store passwords model based on the logged in userid
@@ -307,11 +346,64 @@ def password_storage():
 
     # Iterate thru the queried passwords
     for thisPassword in thesePasswords:
+        # If the password is in the displaylist the password while be displayed else it will be obscured.
+        if thisPassword.id in displayList:
+            passwordToPass = thisPassword.password
+        else:
+            passwordToPass = "*****"
+
         # Append the password and required data to a list
-        passwordList.append([thisPassword.acctlocation, thisPassword.username, thisPassword.password])
+        passwordList.append([thisPassword.acctlocation, thisPassword.username, passwordToPass, thisPassword.id])
 
     return render_template('password-storage.html', title="Password Storage", displayLogonForm=False,
                            name=current_user.name, passwords=passwordList)
+
+
+# Password Mod URL Route and Password Mod View Function
+@app.route('/pwd-mod', methods=["POST"])
+# Login Required to reach this URL Route
+@login_required
+def password_modification():
+    # Flag indicating a modification has been made
+    passwordModded = False
+
+    # If the submission to this page was sent by password-storage
+    if 'mod' in request.form:
+        # Query the list of passwords for the current user
+        thesePasswords = StoredPassword.query.filter_by(userid=current_user.id).all()
+        # Iterate thru users stored passwords
+        for thisPassword in thesePasswords:
+            # if the current passwords id matches that which is to be modified
+            if thisPassword.id == int(request.form['mod'].split(' ')[1]):
+                # save a copy of the current password
+                tmpPass = thisPassword
+                # delete the password record
+                db.session.delete(thisPassword)
+                # Commit deletion to the database
+                db.session.commit()
+        # pass the copy of the current password to this page
+        return render_template('password-modification.html', title="Password Modification", displayLogonForm=False,
+                           name=current_user.name, passwordToDisplay=tmpPass)
+
+    # if the submission has been sent from this page
+    if 'modpass' in request.form:
+        # Initial the stored password variables
+        username = request.form["username"]
+        password = request.form["passwd"]
+        location = request.form["location"]
+
+        # Create a new StoredPassword Model Object
+        newpassword = StoredPassword(username=username, password=password, acctlocation=location,
+                                     userid=current_user.id)
+        # Add the Model Object to the DB Session
+        db.session.add(newpassword)
+        # Commit the Addition to the DB
+        db.session.commit()
+        # Set the Password Modification Flag
+        passwordModded = True
+
+    return render_template('password-modification.html', title="Password Modification", displayLogonForm=False,
+                           name=current_user.name, passwordModified=passwordModded)
 
 
 # User Logout URL Route and User Logout View Function
