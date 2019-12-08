@@ -1,0 +1,27 @@
+{%  extends "base.html" %}
+{% block content %}
+    <h4>User Information:</h4>
+    {% if user %}
+        <form action="{{ url_for('user_management') }}" method="post">
+            Username:         <input type="text" name="username" value="{{ user['username'] }}">
+            Email:            <input type="text" name="email" value="{{ user['email'] }}"><br><br>
+            <h4>To Change Password:</h4>
+            Current Password:         <input type="password" name="currentpassword"><br><br>
+            New Password:         <input type="password" name="newpassword">
+            Confirm New Password: <input type="password" name="newpasswordconfirm"><br><br>
+            <h4>To Submit all changes -->  <input type=submit name="userchange" value="Submit"><br><br></h4>
+        </form>
+    <h4 style="color:red">User Account Deletion:</h4>
+        <form action="{{ url_for('user_management') }}" method="post">
+            <p style="color:red">Delete Confirmation (Type DELETE to delete account & all stored passwords): <input type="text" name="deleteconfirmation" value=""></p>
+            <input type=submit name="userdelete" value="Delete User"><br><br>
+        </form>
+    {% endif %}
+    {% if userchanges %}
+        <h3><p style="color:green">User Changes Applied</p></h3>
+    {% endif %}
+    {% if passwordchangefail %}
+        <h3><p style="color:red">Password Change Failure (Current Password Incorrect or New Passwords didn't Match)
+        </p></h3>
+    {% endif %}
+{% endblock %}
