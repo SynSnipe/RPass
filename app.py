@@ -6,7 +6,8 @@ from flask_login import LoginManager, UserMixin, login_required, login_user, log
 from flask_sqlalchemy import SQLAlchemy
 import random
 import math
-
+import hashlib
+from cryptography.fernet import Fernet
 
 # Define Flask App
 global app
@@ -18,11 +19,16 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////Users//sean_local//PycharmPr
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'mysecret'
 
+# Salt for password hashes
+global salt
+salt = '10@(83'
+# Encryption key for password storage encryption and decryption
+global key
+key = b'VM4oCt3lOj-d0-6lPcrH_-TqlOpfB86PGnGAmINgw2o='
 
 # Define SQLAlchemy Database Object
 global db
 db = SQLAlchemy(app)
-
 
 # Define Flask Login Manager to Handle User Authentication and Access
 login_manager = LoginManager()
@@ -43,7 +49,7 @@ class AppUser(db.Model):
                       unique=True,
                       nullable=False)
 
-    password = db.Column(db.String(120),
+    phash = db.Column(db.String(120),
                          unique=True,
                          nullable=False)
 
@@ -57,13 +63,16 @@ class StoredPassword(db.Model):
                    primary_key=True)
 
     acctlocation = db.Column(db.String(120),
-                             nullable=False)
+                             nullable=False,
+                             unique=False)
 
     password = db.Column(db.String(120),
-                         nullable=False)
+                         nullable=False,
+                         unique=False)
 
     username = db.Column(db.String(120),
-                         nullable=False)
+                         nullable=False,
+                         unique=False)
 
     userid = db.Column(db.Integer,
                        nullable=False)
@@ -79,7 +88,7 @@ class User(UserMixin):
         curruser = AppUser.query.filter_by(id=id).first()
         self.id = id
         self.name = curruser.username
-        self.password = curruser.password
+        self.phash = curruser.phash
 
     def __repr__(self):
         return "%s" % self.name
@@ -108,6 +117,7 @@ def buildCharSet(lower, upper, number, special):
     return charlist
 
 
+# create random password based on the charlist
 def password(length=12, charlist=[]):
     password = []
     for x in range(0, length):
@@ -165,6 +175,20 @@ def entropyCalc(password):
     return entropy
 
 
+# Function to identify password strength based on password entropy
+def passwordStrength(passwordEntropy):
+    if passwordEntropy >= 128:
+        return "verystrong"
+    elif passwordEntropy >= 60:
+        return "strong"
+    elif passwordEntropy >= 36:
+        return "reasonable"
+    elif passwordEntropy >= 28:
+        return "weak"
+    else:
+        return "veryweak"
+
+
 # Home Page URL Route and Home Page View Function
 @app.route('/')
 def home_page():
@@ -178,17 +202,41 @@ def home_page():
 @app.route('/user_register', methods=["GET", "POST"])
 def user_register():
     # If the user has submitted data for User Registration
+    failedUserCreation = False
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        email = request.form['email']
-        # Create User with SQLAlchemy
-        newuser = AppUser(username=username, password=password, email=email)
-        db.session.add(newuser)
-        db.session.commit()
-        # Render page showing successful user registration and logon form
-        return render_template('base.html', title="User Registration", displayLogonForm=True,
-                               message="User Created Successfully", displayUserRegisterForm=False)
+        # Ensure the user has submitted a username that is not an empty string
+        if ('username' in request.form) and (request.form['username'] != ""):
+            username = request.form['username']
+        else:
+            failedUserCreation = True
+
+        # Ensure the user has submitted a password that is not an empty string
+        if ('password' in request.form) and (request.form['password'] != ""):
+            password = request.form['password']
+            tobehashed = password+salt
+            passwordHash = hashlib.md5(tobehashed.encode()).hexdigest()
+        else:
+            failedUserCreation = True
+
+        # Ensure the user submitted an email address that is not an empty string
+        if('email' in request.form) and (request.form['email'] != ""):
+            email = request.form['email']
+        else:
+            failedUserCreation = True
+
+        # Render a failed user creation page if the appropriate items were not submitted
+        if failedUserCreation:
+            return render_template('base.html', title="User Registration", displayLogonForm=False,
+                               message="User Creation Failed", displayUserRegisterForm=True)
+        # Create the user if no issues were found during submission
+        else:
+            # Create User with SQLAlchemy
+            newuser = AppUser(username=username, phash=passwordHash, email=email)
+            db.session.add(newuser)
+            db.session.commit()
+            # Render page showing successful user registration and logon form
+            return render_template('base.html', title="User Registration", displayLogonForm=True,
+                                   message="User Created Successfully", displayUserRegisterForm=False)
 
     # If an unauthenticated user navigates to the User Registration Page
     else:
@@ -203,14 +251,17 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
+        # compute password salted hash with for verification against stored salted hash
+        tobehashed = password+salt
+        passwordHash = hashlib.md5(tobehashed.encode()).hexdigest()
         # Query users from AppUser Model
         qusers = AppUser.query.filter_by(username=username)
         # iterate through the queried users
         for myuser in qusers:
             # if the submitted user equals the queried username
             if username == myuser.username:
-                # if the submitted password equals the queried password
-                if password == myuser.password:
+                # if the submitted password hash equals the queried password hash
+                if passwordHash == myuser.phash:
                     # create login manager user object
                     tmp_user = User(myuser.id)
                     # log user in
@@ -234,6 +285,77 @@ def login():
         # If user is not authenticated, display logon form
         else:
             return render_template('base.html', title="User Login", displayLogonForm=True)
+    return abort(401)
+
+
+# User-Management URL Route and User-Management View Function
+@app.route('/user-management', methods=["GET", "POST"])
+# Login Required to reach this URL Route
+@login_required
+def user_management():
+
+    thisUser = AppUser.query.filter_by(id=current_user.id).first()
+    tmpUser = {}
+    passwordChangeFail = False
+    userChangesApplied = False
+    # If the user posted forms
+    if request.method == "POST":
+        # if the user posted changes to their user account
+        if 'userchange' in request.form:
+            # Check for changes to username and ensure their username is not an empty string
+            if (request.form['username'] != thisUser.username) and (request.form['username'] != ''):
+                thisUser.username = request.form['username']
+                userChangesApplied = True
+            # Check for changes to email and ensure their email address is not an empty string
+            if (request.form['email'] != thisUser.email) and (request.form['email'] != ''):
+                thisUser.email = request.form['email']
+                userChangesApplied = True
+            # Check for a null new password
+            if request.form['newpassword'] != "":
+                tobehashed = request.form['currentpassword'] + salt
+                passwordHash = hashlib.md5(tobehashed.encode()).hexdigest()
+                # check to ensure the new password hash and the old password hash are not the same
+                if passwordHash == thisUser.phash:
+                    # check that the newpassword and confirmed newpassword are the same
+                    if request.form['newpassword'] == request.form['newpasswordconfirm']:
+                        tobehashed = request.form['newpassword'] + salt
+                        passwordHash = hashlib.md5(tobehashed.encode()).hexdigest()
+                        thisUser.phash = passwordHash
+                        userChangesApplied = True
+                    else:
+                        passwordChangeFail = True
+                        userChangesApplied = False
+                else:
+                    passwordChangeFail = True
+                    userChangesApplied = False
+        # If the user requested account deletion
+        if 'userdelete' in request.form:
+            # Ensure the user submitted the correct text to confirm account deletion
+            if request.form['deleteconfirmation'] == 'DELETE':
+                # Delete all stored passwords for the user
+                for thisStoredPassword in StoredPassword.query.filter_by(userid=current_user.id).all():
+                    db.session.delete(thisStoredPassword)
+                thisUser = AppUser.query.filter_by(id=current_user.id).first()
+                # delete the user
+                db.session.delete(thisUser)
+                db.session.commit()
+                # logout the user
+                logout_user()
+                return render_template('base.html', title="User Logout",
+                                       messsage="User Deleted and Logged out Successfully", displayLogonForm=True)
+            else:
+                return render_template('user-management.html', title="User Management",
+                                       message="User Not Deleted, confirmation not provided", displayLogonForm=False,
+                                       name=current_user.name, displayUserRegisterForm=False, user=tmpUser)
+        db.session.commit()
+
+    thisUser = AppUser.query.filter_by(id=current_user.id).first()
+    tmpUser['username'] = thisUser.username
+    tmpUser['email'] = thisUser.email
+
+    return render_template('user-management.html', title="User Management", displayLogonForm=False,
+                           name=current_user.name, displayUserRegisterForm=False, user=tmpUser,
+                           passwordchangefail=passwordChangeFail, userchanges=userChangesApplied)
 
 
 # Password Generation URL Route and Password Generation View Function
@@ -245,12 +367,16 @@ def password_generation():
     genpass = ""
     passent = 0
     thislower, thisupper, thisnumber, thisspec = False, False, False, False
-
+    passstrength = ""
+    generationmessage = ""
     # if the request method was a post meaning there was user submission
     if request.method == 'POST':
         # Set all the variables based on user input
         if request.form['length']:
-            thislength = int(request.form["length"])
+            if all(x.isdigit() for x in request.form['length']):
+                thislength = int(request.form["length"])
+            else:
+                generationmessage += 'Please submit an integer value for length.  '
         else:
             thislength = 12
         if 'lowers' in request.form:
@@ -261,17 +387,20 @@ def password_generation():
             thisnumber = True
         if 'specials' in request.form:
             thisspec = True
-
-        # build the charlist to use for password generation
-        charlist = buildCharSet(thislower, thisupper, thisnumber, thisspec)
-        # generate the password based ont he charlist and length
-        genpass = password(thislength, charlist)
-        # calculate entropy of the generated password
-        passent = "%.0f" % entropyCalc(genpass)
+        if not all([thislower, thisupper, thisnumber, thisspec]):
+            generationmessage += 'Password not generated, Character Inclusions not chosen.  '
+        else:
+            # build the charlist to use for password generation
+            charlist = buildCharSet(thislower, thisupper, thisnumber, thisspec)
+            # generate the password based ont he charlist and length
+            genpass = password(thislength, charlist)
+            # calculate entropy of the generated password
+            passent = "%.0f" % entropyCalc(genpass)
+            passstrength = passwordStrength(int(passent))
 
     return render_template('password-generation.html', title="Password Generation", displayLogonForm=False,
-                           name=current_user.name, generated_password=genpass,
-                           generated_password_entropy=passent)
+                           name=current_user.name, generated_password=genpass, message=generationmessage,
+                           generated_password_entropy=passent, generated_password_strength=passstrength)
 
 
 # Password Entropy Calculator URL Route and Password Entropy Calculator View Function
@@ -282,17 +411,24 @@ def password_entropy_calculator():
     # Initialize function variables
     subpass = ""
     subpassent = 0
+    passstrength = ""
+    entcalcmessage = ""
+
 
     # If the request method is a post meaning the user submitted data
     if request.method == 'POST':
-        if 'subpass' in request.form:
+        if ('subpass' in request.form) and (request.form['subpass'] != ''):
             subpass = request.form["subpass"]
             # Calculate Entropy of the submitted password
             subpassent = "%.0f" % entropyCalc(request.form['subpass'])
+            passstrength = passwordStrength(int(subpassent))
+        else:
+            entcalcmessage = 'Please specify a password to calculate.'
 
     return render_template('password-entropy-calculator.html', title="Password Entropy Calculator",
                            displayLogonForm=False, name=current_user.name, submitted_password=subpass,
-                           submitted_password_entropy=subpassent)
+                           submitted_password_entropy=subpassent, submitted_password_strength=passstrength,
+                           message=entcalcmessage)
 
 
 # Password Storage URL Route and Password Storage View Function
@@ -301,6 +437,8 @@ def password_entropy_calculator():
 @login_required
 def password_storage():
     displayList = []
+    failedSubmission = False
+    storagemessage = ''
     if request.method == 'POST':
         # If the user opted to delete all passwords
         if 'deleteall' in request.form:
@@ -311,33 +449,43 @@ def password_storage():
                     db.session.delete(thisStoredPassword)
                 # Commit the deletions to the database
                 db.session.commit()
-        # If the user opted to delete a password
-        if 'delete' in request.form:
-            # Iterate thru all stored passwords
-            for thisStoredPassword in StoredPassword.query.filter_by(userid=current_user.id).all():
-                # If the current password matches the record ID submitted by the user
-                if thisStoredPassword.id == int(request.form['delete'].split(' ')[1]):
-                    # Delete the password model object
-                    db.session.delete(thisStoredPassword)
-            # Commit the deletion to the database
-            db.session.commit()
+                storagemessage = 'Passwords deleted'
+            else:
+                storagemessage = 'Passwords not deleted, necessary confirmation text not provided.'
         # Check to see if the user has clicked Display to show a password
         if 'display' in request.form:
             # Add the current stored password ID to the displaylist
-            displayList.append(int(request.form['display'].split(' ')[1]))
+            displayList.append(int(request.form['passid']))
         # If the user has submitted a new stored password record
         if 'newpass' in request.form:
             # Initialize the temporary variables
-            username = request.form["username"]
-            password = request.form["passwd"]
-            location = request.form["location"]
-            # Create a new StoredPassword Model Object
-            newpassword = StoredPassword(username=username, password=password, acctlocation=location,
-                                         userid=current_user.id)
-            # Add the new Stored Password Model Object to the Database Session
-            db.session.add(newpassword)
-            # Commit the new objec to the Database.
-            db.session.commit()
+            if ('username' in request.form) and (request.form['username'] != ''):
+                username = request.form["username"]
+            else:
+                failedSubmission = True
+            if ('passwd' in request.form) and (request.form['passwd'] != ''):
+                # Encrypt Password before storage
+                f = Fernet(key)
+                tmpPass = bytes(request.form["passwd"], 'utf-8')
+                encpassword = f.encrypt(tmpPass)
+            else:
+                failedSubmission = True
+            if ('location' in request.form) and (request.form['location'] != ''):
+                location = request.form["location"]
+            else:
+                failedSubmission = True
+
+            if not failedSubmission:
+                # Create a new StoredPassword Model Object
+                newpassword = StoredPassword(username=username, password=encpassword, acctlocation=location,
+                                             userid=current_user.id)
+                # Add the new Stored Password Model Object to the Database Session
+                db.session.add(newpassword)
+                # Commit the new object to the Database.
+                db.session.commit()
+                storagemessage = 'Password Stored Successfully'
+            else:
+                storagemessage = 'Password not stored.  Please fill all required fields.'
 
     passwordList = []
 
@@ -348,7 +496,9 @@ def password_storage():
     for thisPassword in thesePasswords:
         # If the password is in the displaylist the password while be displayed else it will be obscured.
         if thisPassword.id in displayList:
-            passwordToPass = thisPassword.password
+            f = Fernet(key)
+            # Decrypt the password so it can be displayed to the user
+            passwordToPass = f.decrypt(thisPassword.password).decode('utf-8')
         else:
             passwordToPass = "*****"
 
@@ -356,7 +506,7 @@ def password_storage():
         passwordList.append([thisPassword.acctlocation, thisPassword.username, passwordToPass, thisPassword.id])
 
     return render_template('password-storage.html', title="Password Storage", displayLogonForm=False,
-                           name=current_user.name, passwords=passwordList)
+                           name=current_user.name, passwords=passwordList, message=storagemessage)
 
 
 # Password Mod URL Route and Password Mod View Function
@@ -374,7 +524,7 @@ def password_modification():
         # Iterate thru users stored passwords
         for thisPassword in thesePasswords:
             # if the current passwords id matches that which is to be modified
-            if thisPassword.id == int(request.form['mod'].split(' ')[1]):
+            if thisPassword.id == int(request.form['passid']):
                 # save a copy of the current password
                 tmpPass = thisPassword
                 # delete the password record
@@ -383,17 +533,20 @@ def password_modification():
                 db.session.commit()
         # pass the copy of the current password to this page
         return render_template('password-modification.html', title="Password Modification", displayLogonForm=False,
-                           name=current_user.name, passwordToDisplay=tmpPass)
+                                name=current_user.name, passwordToDisplay=tmpPass)
 
     # if the submission has been sent from this page
     if 'modpass' in request.form:
         # Initial the stored password variables
         username = request.form["username"]
-        password = request.form["passwd"]
+        f = Fernet(key)
+        tmpPass = bytes(request.form["passwd"], 'utf-8')
+        # Encrypt the password before storage
+        newpass = f.encrypt(tmpPass)
         location = request.form["location"]
 
         # Create a new StoredPassword Model Object
-        newpassword = StoredPassword(username=username, password=password, acctlocation=location,
+        newpassword = StoredPassword(username=username, password=newpass, acctlocation=location,
                                      userid=current_user.id)
         # Add the Model Object to the DB Session
         db.session.add(newpassword)
@@ -406,13 +559,40 @@ def password_modification():
                            name=current_user.name, passwordModified=passwordModded)
 
 
+# Password Deletion URL Route and Password Deletion View Function
+@app.route('/pwd-del', methods=["POST"])
+# Login Required to reach this URL Route
+@login_required
+def password_deletion():
+    deletionmessage = ''
+    if 'delpass' in request.form:
+        for thisStoredPassword in StoredPassword.query.filter_by(userid=current_user.id).all():
+            # If the current password matches the record ID submitted by the user
+            if thisStoredPassword.id == int(request.form['passid']):
+                # Delete the password model object
+                db.session.delete(thisStoredPassword)
+                deletionmessage = 'Password Successfully Deleted'
+        # Commit the deletion to the database
+        db.session.commit()
+        return render_template('password-deletion.html', title="Password Deletion", displayLogonForm=False,
+                                name=current_user.name, message=deletionmessage)
+    # If the user opted to delete a password
+    if 'delete' in request.form:
+        # Iterate thru all stored passwords
+        for thisStoredPassword in StoredPassword.query.filter_by(userid=current_user.id).all():
+            if thisStoredPassword.id == int(request.form['passid']):
+                tmpPassword = thisStoredPassword
+        return render_template('password-deletion.html', title="Password Deletion", displayLogonForm=False,
+                                name=current_user.name, message=deletionmessage, passwordToDisplay=tmpPassword)
+
 # User Logout URL Route and User Logout View Function
 @app.route('/logout')
 # Login Required to reach this URL Route
 @login_required
 def logout():
     logout_user()
-    return render_template('base.html', title="User Logout", messsage="User Logged out Successfully", displayLogonForm=True)
+    return render_template('base.html', title="User Logout", messsage="User Logged out Successfully",
+                           displayLogonForm=True)
 
 
 # Login Manager load_user Definition
