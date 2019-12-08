@@ -15,6 +15,6 @@ Download and Install Python 3.8
 if you downloaded a zip, unzip contents
 
 2) Change directory to application folder
-	`cd rpass-master`
+	`cd RPass-master`
 3) Run Application
 	`python3 app.py`
