@@ -5,7 +5,7 @@ R-Pass is a Random Password Generator, Password Entropy/Strength Calculator and 
 
 # Installation
 ## Install Python
-Download and Install Python 3.8
+Download and Install Python 3.8 to include pip
 
 ## Install RPass
 1) Download Source
@@ -16,5 +16,7 @@ if you downloaded a zip, unzip contents
 
 2) Change directory to application folder
 	`cd RPass-master`
+3) Install RPass Dependencies
+	`pip install -r requirements.txt`
 3) Run Application
 	`python3 app.py`
