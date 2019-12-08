@@ -387,7 +387,7 @@ def password_generation():
             thisnumber = True
         if 'specials' in request.form:
             thisspec = True
-        if not all([thislower, thisupper, thisnumber, thisspec]):
+        if not any([thislower, thisupper, thisnumber, thisspec]):
             generationmessage += 'Password not generated, Character Inclusions not chosen.  '
         else:
             # build the charlist to use for password generation
