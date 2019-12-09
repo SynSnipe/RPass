@@ -1,0 +1,16 @@
+.titleCard{
+  text-align: justify;
+}
+.navBar{
+  font-weight: bold;
+  -o-animation: cubic-bezier(1, 0, 0, 1);
+}
+.backBody {
+    background-image: url("/static/img/vault.jpg");
+    background-size: cover;
+    background-repeat: no-repeat;
+  }
+  .navBar{
+    font-size: medium;
+    font-style: oblique;
+  }
