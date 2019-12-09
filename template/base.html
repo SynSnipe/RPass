@@ -1,28 +1,30 @@
 <!doctype html>
 <title>RPass - {{ title }}</title>
 <!-- <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"> -->
-<body>
-
+<head>
+        <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class = "backBody">
     <header>
         {% block header %}{% endblock %}
     </header>
 
-    <h1>{{ title }}</h1>
+    <h1 class = "titleCard">{{ title }}</h1>
 
     <h3>{{ message }}</h3>
 
     <nav>
-        <ul>
+        <ul class = "navBar">
             {% if name %}
-                <li>Current User: <a href="{{ url_for('user_management') }}">{{ name }}</a>
+                <li class="userName">Current User: <a href="{{ url_for('user_management') }}">{{ name }}</a>
             {% endif %}
-            <li><a href="{{ url_for('home_page') }}">Home</a>
+            <li ><a href="{{ url_for('home_page') }}">Home</a>
             {% if name %}
-                <li><a href="{{ url_for('password_generation') }}">Password Generation</a>
-                <li><a href="{{ url_for('password_entropy_calculator') }}">Password Entropy Calculator</a>
-                <li><a href="{{ url_for('password_storage') }}">Password Storage</a>
-                <li><a href="{{ url_for('user_management') }}">User Management</a>
-                <li><a href="{{ url_for('logout') }}">Log Out</a>
+                <li class="navbar"><a href="{{ url_for('password_generation') }}">Password Generation</a>
+                <li class="navbar"><a href="{{ url_for('password_entropy_calculator') }}">Password Entropy Calculator</a>
+                <li class="navbar"><a href="{{ url_for('password_storage') }}">Password Storage</a>
+                <li class="navbar"><a href="{{ url_for('user_management') }}">User Management</a>
+                <li class="navbar"><a href="{{ url_for('logout') }}">Log Out</a>
             {% else %}
                 <li><a href="{{ url_for('user_register') }}">Register</a>
                 <li><a href="{{ url_for('login') }}">Log In</a>
