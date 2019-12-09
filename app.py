@@ -11,7 +11,7 @@ from cryptography.fernet import Fernet
 
 # Define Flask App
 global app
-app = Flask(__name__, template_folder="templates")
+app = Flask(__name__, template_folder="template")
 app.debug = False
 # This line is for Sean's development system, you may need to use the line commented below it
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////Users//sean_local//PycharmProjects//pwd_gen_ent_calc//test.db'
